@@ -8,72 +8,161 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>영어 퀴즈</title>
 <style>
-:root{--bg:#111214;--card:#1b1d21;--card2:#15171b;--text:#f5f7fa;--muted:#a8adb7;--btn:#292c32;--ok:#20885d;--bad:#a33f49;--accent:#69c7ee;--line:#2b2e34;--warn:#ffd98a}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans KR",sans-serif}
-button{font:inherit}.wrap{max-width:620px;margin:0 auto;padding:18px 14px 42px}.hidden{display:none!important}
-.header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px}.brand{font-size:24px;font-weight:900}.sub{color:var(--muted);font-size:14px}
-.card,.menuBtn{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:18px}.menuGrid{display:grid;gap:12px}
-.menuBtn{padding:17px;text-align:left;width:100%}.menuBtn:disabled{opacity:.5}.menuBtn b{display:block;font-size:20px;margin-bottom:5px}.menuBtn .desc{color:var(--muted);font-size:14px}
+:root{
+  --bg:#111214;--card:#1b1d21;--card2:#15171b;--text:#f5f7fa;--muted:#a8adb7;
+  --btn:#292c32;--ok:#20885d;--bad:#a33f49;--accent:#69c7ee;--line:#2b2e34;--warn:#ffd98a
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans KR",sans-serif}
+button{font:inherit}
+.wrap{max-width:620px;margin:0 auto;padding:18px 14px 42px}
+.hidden{display:none!important}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px}
+.brand{font-size:24px;font-weight:900}
+.sub{color:var(--muted);font-size:14px}
+.card,.menuBtn{border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:18px}
+.menuGrid{display:grid;gap:12px}
+.menuBtn{padding:17px;text-align:left;width:100%}
+.menuBtn:disabled{opacity:.5}
+.menuBtn b{display:block;font-size:20px;margin-bottom:5px}
+.menuBtn .desc{color:var(--muted);font-size:14px}
 .meta{display:flex;justify-content:space-between;gap:12px;margin-top:12px;color:var(--muted);font-size:13px;flex-wrap:wrap}
-.progress{height:7px;background:#25282e;border-radius:999px;overflow:hidden;margin-top:10px}.progress>i{display:block;height:100%;background:var(--accent);width:0}
-.summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}.stat{padding:14px;border:1px solid var(--line);background:var(--card2);border-radius:15px}.stat strong{display:block;font-size:20px;margin-top:3px}
+.progress{height:7px;background:#25282e;border-radius:999px;overflow:hidden;margin-top:10px}
+.progress>i{display:block;height:100%;background:var(--accent);width:0}
+.summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.stat{padding:14px;border:1px solid var(--line);background:var(--card2);border-radius:15px}
+.stat strong{display:block;font-size:20px;margin-top:3px}
 .notice{padding:13px;border:1px solid #2c4050;background:#14202a;border-radius:14px;color:#b9dff0;font-size:13px;line-height:1.5;margin-bottom:14px}
-.sectionTitle{font-size:15px;font-weight:800;margin:18px 2px 10px}.back{border:0;background:#24272d;color:var(--text);border-radius:12px;padding:9px 12px}
-.quizTop{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:13px;margin-bottom:10px;flex-wrap:wrap}.card{padding:19px}
+.notice.error{border-color:#5a3034;background:#251719;color:#ffb4b4}
+.sectionTitle{font-size:15px;font-weight:800;margin:18px 2px 10px}
+.back{border:0;background:#24272d;color:var(--text);border-radius:12px;padding:9px 12px}
+.quizTop{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:13px;margin-bottom:10px;flex-wrap:wrap}
+.card{padding:19px}
 .badge{display:inline-block;background:#122331;border:1px solid #1c394b;color:#9fdcff;border-radius:999px;padding:3px 8px;font-size:12px;margin-bottom:9px}
-.wordRow{display:flex;align-items:flex-end;gap:9px;flex-wrap:wrap}.word{font-size:31px;font-weight:900;line-height:1.15;overflow-wrap:anywhere}.pron{font-size:12px;color:var(--muted);padding-bottom:3px}
-.ask{font-size:17px;margin:18px 0 14px}.choices{display:grid;gap:10px}.choice,.next,.primary{width:100%;border:0;border-radius:14px;padding:15px 14px;color:var(--text);background:var(--btn);text-align:left}
-.choice.correct{background:var(--ok)}.choice.wrong{background:var(--bad)}.choice:disabled{opacity:.95}.feedback{min-height:28px;margin-top:13px;color:var(--warn)}
-.learn{margin-top:13px;padding:14px;border:1px solid var(--line);background:var(--card2);border-radius:14px;line-height:1.55}.small{font-size:12px;color:var(--muted)}
-.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px}.chip{padding:6px 9px;border-radius:999px;background:#24272d;border:1px solid #30343c;font-size:13px}.next,.primary{text-align:center;background:#176b94;font-weight:800;margin-top:13px}
-.wrongList{display:grid;gap:9px}.wrongItem{padding:13px 14px;border:1px solid var(--line);background:var(--card);border-radius:14px}.wrongItem strong{display:block}.wrongItem span{display:block;color:var(--muted);font-size:12px;margin-top:3px}
-.empty{padding:24px;text-align:center;color:var(--muted);border:1px dashed #373b43;border-radius:16px}.loading{padding:22px;text-align:center;color:#b9dff0}
+.wordRow{display:flex;align-items:flex-end;gap:9px;flex-wrap:wrap}
+.word{font-size:31px;font-weight:900;line-height:1.15;overflow-wrap:anywhere}
+.pron{font-size:12px;color:var(--muted);padding-bottom:3px}
+.ask{font-size:17px;margin:18px 0 14px}
+.choices{display:grid;gap:10px}
+.choice,.next,.primary,.secondary{width:100%;border:0;border-radius:14px;padding:15px 14px;color:var(--text);background:var(--btn);text-align:left}
+.choice.correct{background:var(--ok)}
+.choice.wrong{background:var(--bad)}
+.choice:disabled{opacity:.95}
+.feedback{min-height:28px;margin-top:13px;color:var(--warn)}
+.learn{margin-top:13px;padding:14px;border:1px solid var(--line);background:var(--card2);border-radius:14px;line-height:1.55}
+.small{font-size:12px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px}
+.chip{padding:6px 9px;border-radius:999px;background:#24272d;border:1px solid #30343c;font-size:13px}
+.next,.primary{text-align:center;background:#176b94;font-weight:800;margin-top:13px}
+.secondary{text-align:center;margin-top:9px}
+.wrongList{display:grid;gap:9px}
+.wrongItem{padding:13px 14px;border:1px solid var(--line);background:var(--card);border-radius:14px}
+.wrongItem strong{display:block}
+.wrongItem span{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.empty{padding:24px;text-align:center;color:var(--muted);border:1px dashed #373b43;border-radius:16px}
+.loading{padding:20px 0;color:#b9dff0;text-align:center}
 .version{margin-top:16px;text-align:center;color:#6f7480;font-size:11px;line-height:1.5}
 </style>
 </head>
 <body>
 <div class="wrap">
+
 <section id="home">
-  <div class="header"><div><div class="brand">영어 퀴즈</div><div class="sub">실제 사전 데이터를 불러오는 버전</div></div></div>
-  <div id="dataNotice" class="notice">처음 한 번은 영어-한국어 사전 데이터를 내려받습니다. 이후 기기에 저장되어 오프라인에서도 다시 사용할 수 있습니다.</div>
+  <div class="header">
+    <div>
+      <div class="brand">영어 퀴즈</div>
+      <div class="sub">v4.1 · 메뉴 우선 표시 / 데이터 지연 로딩</div>
+    </div>
+  </div>
+
+  <div id="dataNotice" class="notice">
+    메뉴는 바로 사용할 수 있습니다. 난이도를 누르면 필요한 사전 데이터를 준비합니다.
+  </div>
+
   <div class="summary">
-    <div class="stat"><span class="sub">학습 완료</span><strong id="homeProgress">0</strong></div>
+    <div class="stat"><span class="sub">사전 상태</span><strong id="dictState">미로딩</strong></div>
     <div class="stat"><span class="sub">오답노트</span><strong id="homeWrong">0개</strong></div>
   </div>
+
   <div id="levelGrid" class="menuGrid"></div>
+
   <div class="sectionTitle">복습</div>
-  <button class="menuBtn" id="wrongBtn"><b>오답노트</b><span class="desc">틀린 문제만 따로 모아서 다시 풀기</span><div class="meta"><span id="wrongMeta">0개 저장됨</span><span>열기 →</span></div></button>
-  <div class="version">v4.0 · 기본 단어는 공개 영어-한국어 사전 실데이터 기반<br>데이터 출처: Open English-Korean Dictionary (CC BY-SA 4.0)</div>
+  <button class="menuBtn" id="wrongBtn">
+    <b>오답노트</b>
+    <span class="desc">틀린 문제만 따로 모아서 다시 풀기</span>
+    <div class="meta"><span id="wrongMeta">0개 저장됨</span><span>열기 →</span></div>
+  </button>
+
+  <div class="version">
+    Open English-Korean Dictionary 기반 · CC BY-SA 4.0<br>
+    데이터 로딩이 실패해도 메인 메뉴는 사라지지 않습니다.
+  </div>
 </section>
 
 <section id="categories" class="hidden">
-  <div class="header"><button class="back" id="homeBtn">← 홈</button><div><div class="brand" id="catTitle"></div><div class="sub">학습 유형을 선택하세요.</div></div></div>
+  <div class="header">
+    <button class="back" id="homeBtn">← 홈</button>
+    <div>
+      <div class="brand" id="catTitle"></div>
+      <div class="sub">학습 유형을 선택하세요.</div>
+    </div>
+  </div>
+
+  <div id="categoryNotice" class="notice hidden"></div>
   <div id="categoryGrid" class="menuGrid"></div>
 </section>
 
 <section id="wrongBook" class="hidden">
-  <div class="header"><button class="back" id="wrongHomeBtn">← 홈</button><div><div class="brand">오답노트</div><div class="sub">첫 시도에 맞히면 오답에서 제거됩니다.</div></div></div>
+  <div class="header">
+    <button class="back" id="wrongHomeBtn">← 홈</button>
+    <div>
+      <div class="brand">오답노트</div>
+      <div class="sub">첫 시도에 맞히면 오답에서 제거됩니다.</div>
+    </div>
+  </div>
+
   <button id="reviewAllBtn" class="primary">오답만 풀기</button>
   <div class="sectionTitle">저장된 오답</div>
   <div id="wrongList" class="wrongList"></div>
 </section>
 
 <section id="quiz" class="hidden">
-  <div class="header"><button class="back" id="quizBack">← 목록</button><div class="sub" id="quizModeLabel"></div></div>
-  <div class="quizTop"><span id="quizProgress"></span><span id="sessionScore">정답 0 · 연속 0</span></div>
+  <div class="header">
+    <button class="back" id="quizBack">← 목록</button>
+    <div class="sub" id="quizModeLabel"></div>
+  </div>
+
+  <div class="quizTop">
+    <span id="quizProgress"></span>
+    <span id="sessionScore">정답 0 · 연속 0</span>
+  </div>
+
   <div class="progress" style="margin-bottom:12px"><i id="quizBar"></i></div>
+
   <div class="card">
     <div class="badge" id="badge"></div>
-    <div class="wordRow"><div class="word" id="word"></div><div class="pron" id="pron"></div></div>
+    <div class="wordRow">
+      <div class="word" id="word"></div>
+      <div class="pron" id="pron"></div>
+    </div>
+
     <div class="ask">가장 알맞은 뜻을 고르세요.</div>
     <div id="choices" class="choices"></div>
     <div id="feedback" class="feedback"></div>
+
     <div id="learn" class="learn hidden">
-      <div id="core"></div><div id="related" style="margin-top:8px"></div><div id="structure" style="margin-top:8px"></div><div id="mnemonic" style="margin-top:8px"></div><div id="association" style="margin-top:8px"></div>
+      <div id="core"></div>
+      <div id="related" style="margin-top:8px"></div>
+      <div id="structure" style="margin-top:8px"></div>
+      <div id="mnemonic" style="margin-top:8px"></div>
+      <div id="association" style="margin-top:8px"></div>
     </div>
+
     <button id="nextBtn" class="next hidden">다음 문제</button>
   </div>
 </section>
+
 </div>
 <script src="app.js"></script>
-</body></html>
+</body>
+</html>
