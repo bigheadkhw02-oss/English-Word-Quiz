@@ -1,134 +1,83 @@
-const DATA=window.QUIZ_DATA;
-const STORE_KEY="englishQuizV2Progress";
+const M=window.PACK_MANIFEST;
+window.QUIZ_PACKS=window.QUIZ_PACKS||{};
 const $=id=>document.getElementById(id);
 const screens=["home","categories","wrongBook","quiz"];
-let selectedLevel=null,selectedCategory=null,currentPool=[],queue=[],current=null;
-let reviewMode=false,sessionScore=0,streak=0,tries=0,locked=false;
+const LS_PREFIX="eq3_bits_";
+let selectedLevel=null,selectedPackKey=null,currentPool=[],queue=[],current=null,reviewMode=false,sessionScore=0,streak=0,tries=0,locked=false;
 
-function loadState(){
-  try{return JSON.parse(localStorage.getItem(STORE_KEY))||{completed:{},wrong:{}}}
-  catch(e){return {completed:{},wrong:{}}}
-}
-let state=loadState();
-function saveState(){localStorage.setItem(STORE_KEY,JSON.stringify(state))}
 function show(id){screens.forEach(s=>$(s).classList.toggle("hidden",s!==id));window.scrollTo(0,0)}
 function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
-function allItems(){
-  const out=[];
-  Object.entries(DATA).forEach(([lk,l])=>Object.entries(l.categories).forEach(([ck,c])=>c.items.forEach(item=>out.push({...item,level:lk,category:ck}))));
-  return out;
-}
-function itemMap(){const m={};allItems().forEach(x=>m[x.id]=x);return m}
-function categoryKey(l,c){return `${l}:${c}`}
-function completedSet(l,c){return new Set(state.completed[categoryKey(l,c)]||[])}
-function wrongIds(){return Object.keys(state.wrong||{})}
-function categoryStats(l,c){
-  const items=DATA[l].categories[c].items,total=items.length,done=completedSet(l,c).size;
-  const ids=new Set(items.map(x=>x.id));
-  const wrong=wrongIds().filter(id=>ids.has(id)).length;
-  return {total,done,wrong,pct:total?Math.round(done/total*100):0}
-}
-function levelStats(l){
-  let total=0,done=0,wrong=0;
-  Object.keys(DATA[l].categories).forEach(c=>{const s=categoryStats(l,c);total+=s.total;done+=s.done;wrong+=s.wrong});
-  return {total,done,wrong,pct:total?Math.round(done/total*100):0}
-}
-function renderHome(){
+function levelKeys(){return [...new Set(Object.keys(M).map(k=>k.split(":")[0]))]}
+function getPackKeys(level){return Object.keys(M).filter(k=>k.startsWith(level+":"))}
+function bytesForTarget(t){return Math.ceil(t/8)}
+function b64ToBytes(s,len){const out=new Uint8Array(len);if(!s)return out;try{const bin=atob(s);for(let i=0;i<Math.min(bin.length,len);i++)out[i]=bin.charCodeAt(i)}catch(e){}return out}
+function bytesToB64(arr){let s="";const step=8192;for(let i=0;i<arr.length;i+=step)s+=String.fromCharCode(...arr.subarray(i,i+step));return btoa(s)}
+function bitArray(packKey){const t=M[packKey].target;return b64ToBytes(localStorage.getItem(LS_PREFIX+packKey),bytesForTarget(t))}
+function hasDone(packKey,n){const b=bitArray(packKey);return !!(b[n>>3]&(1<<(n&7)))}
+function markDone(packKey,n){const b=bitArray(packKey);b[n>>3]|=(1<<(n&7));localStorage.setItem(LS_PREFIX+packKey,bytesToB64(b))}
+function popcnt8(x){x=x-((x>>1)&0x55);x=(x&0x33)+((x>>2)&0x33);return (x+(x>>4))&0x0F}
+function doneCount(packKey){const b=bitArray(packKey);let n=0;for(const x of b)n+=popcnt8(x);return n}
+
+function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open("EnglishQuizV3",1);r.onupgradeneeded=()=>{const db=r.result;if(!db.objectStoreNames.contains("wrong"))db.createObjectStore("wrong",{keyPath:"key"})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function wrongAll(){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction("wrong","readonly"),r=tx.objectStore("wrong").getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})}
+async function wrongPut(packKey,n){const db=await openDB(),key=packKey+"#"+n;return new Promise((res,rej)=>{const tx=db.transaction("wrong","readwrite"),st=tx.objectStore("wrong"),g=st.get(key);g.onsuccess=()=>{const old=g.result;st.put({key,packKey,n,count:(old?.count||0)+1,last:Date.now()})};tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}
+async function wrongDelete(packKey,n){const db=await openDB();return new Promise((res,rej)=>{const tx=db.transaction("wrong","readwrite");tx.objectStore("wrong").delete(packKey+"#"+n);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}
+
+function loadPack(packKey){return new Promise((resolve,reject)=>{if(window.QUIZ_PACKS[packKey])return resolve(window.QUIZ_PACKS[packKey]);const s=document.createElement("script");s.src=M[packKey].file+"?v=3";s.onload=()=>resolve(window.QUIZ_PACKS[packKey]||[]);s.onerror=reject;document.head.appendChild(s)})}
+
+async function renderHome(){
+  const wrong=(await wrongAll()).length;
+  let done=0;Object.keys(M).forEach(k=>done+=doneCount(k));
+  $("homeProgress").textContent=done.toLocaleString()+" / 190,000";
+  $("homeWrong").textContent=wrong.toLocaleString()+"개";$("wrongMeta").textContent=wrong.toLocaleString()+"개 저장됨";
   const grid=$("levelGrid");grid.innerHTML="";
-  let grandTotal=0,grandDone=0;
-  Object.entries(DATA).forEach(([lk,l])=>{
-    const s=levelStats(lk);grandTotal+=s.total;grandDone+=s.done;
+  const labels={middle:"중등",high:"고등",college:"대학",advanced:"심화",conversation:"원어민 일상 프리토킹"};
+  for(const level of levelKeys()){
+    const keys=getPackKeys(level),target=keys.reduce((s,k)=>s+M[k].target,0),dc=keys.reduce((s,k)=>s+doneCount(k),0);
     const b=document.createElement("button");b.className="menuBtn";
-    b.innerHTML=`<b>${l.label}</b><span class="desc">${Object.values(l.categories).map(x=>x.label).join(" · ")}</span><div class="progress"><i style="width:${s.pct}%"></i></div><div class="meta"><span>진행 ${s.done}/${s.total} (${s.pct}%)</span><span>오답 ${s.wrong}</span></div>`;
-    b.onclick=()=>openCategories(lk);grid.appendChild(b);
-  });
-  $("homeProgress").textContent=`${grandDone} / ${grandTotal}`;
-  $("homeWrong").textContent=`${wrongIds().length}개`;
-  $("wrongMeta").textContent=`${wrongIds().length}개 저장됨`;
+    b.innerHTML=`<b>${labels[level]||level}</b><span class="desc">${keys.map(k=>M[k].categoryLabel).join(" · ")}</span><div class="progress"><i style="width:${target?dc/target*100:0}%"></i></div><div class="meta"><span>진행 ${dc.toLocaleString()}/${target.toLocaleString()}</span><span>${target?Math.floor(dc/target*100):0}%</span></div>`;
+    b.addEventListener("click",()=>openCategories(level,labels[level]||level));grid.appendChild(b)
+  }
 }
-function showHome(){renderHome();show("home")}
-function openCategories(l){
-  selectedLevel=l;$("catTitle").textContent=DATA[l].label;
-  const grid=$("categoryGrid");grid.innerHTML="";
-  Object.entries(DATA[l].categories).forEach(([ck,c])=>{
-    const s=categoryStats(l,ck),b=document.createElement("button");b.className="menuBtn";
-    b.innerHTML=`<b>${c.label}</b><span class="desc">${c.desc}</span><div class="progress"><i style="width:${s.pct}%"></i></div><div class="meta"><span>진행 ${s.done}/${s.total} (${s.pct}%)</span><span>오답 ${s.wrong}</span></div>`;
-    b.onclick=()=>startCategory(l,ck);grid.appendChild(b);
-  });
-  show("categories");
+async function showHome(){await renderHome();show("home")}
+async function openCategories(level,label){
+  selectedLevel=level;$("catTitle").textContent=label;const grid=$("categoryGrid");grid.innerHTML="";
+  for(const k of getPackKeys(level)){
+    const p=M[k],done=doneCount(k),pct=Math.floor(done/p.target*100);
+    const b=document.createElement("button");b.className="menuBtn";
+    b.innerHTML=`<b>${p.categoryLabel}</b><span class="desc">${p.desc}</span><div class="progress"><i style="width:${pct}%"></i></div><div class="meta"><span>진행 ${done.toLocaleString()}/${p.target.toLocaleString()} (${pct}%)</span><span>현재 데이터 ${p.available.toLocaleString()}개</span></div>`;
+    b.addEventListener("click",()=>startPack(k));grid.appendChild(b)
+  }
+  show("categories")
 }
-function startCategory(l,c){
-  selectedLevel=l;selectedCategory=c;reviewMode=false;sessionScore=0;streak=0;
-  currentPool=DATA[l].categories[c].items.map(x=>({...x,level:l,category:c}));
-  const done=completedSet(l,c);
-  let unseen=currentPool.filter(x=>!done.has(x.id));
+async function startPack(packKey){
+  selectedPackKey=packKey;reviewMode=false;sessionScore=0;streak=0;
+  currentPool=await loadPack(packKey);
+  if(!currentPool.length){alert("이 데이터팩에는 아직 문제가 없습니다.");return}
+  let unseen=currentPool.filter(x=>!hasDone(packKey,x.n));
   queue=shuffle(unseen.length?unseen:currentPool);
-  $("quizModeLabel").textContent=`${DATA[l].label} · ${DATA[l].categories[c].label}`;
-  $("quizBack").onclick=()=>openCategories(l);
-  show("quiz");nextQuestion();
+  $("quizModeLabel").textContent=M[packKey].levelLabel+" · "+M[packKey].categoryLabel;
+  $("quizBack").onclick=()=>openCategories(selectedLevel,M[packKey].levelLabel);show("quiz");nextQuestion()
 }
-function openWrongBook(){
-  const map=itemMap(),ids=wrongIds();
-  $("reviewAllBtn").disabled=ids.length===0;
-  $("reviewAllBtn").style.opacity=ids.length?1:.45;
-  const box=$("wrongList");box.innerHTML="";
-  if(!ids.length){box.innerHTML=`<div class="empty">현재 오답이 없습니다.<br>틀린 문제는 자동으로 여기에 저장됩니다.</div>`}
-  else ids.forEach(id=>{
-    const x=map[id];if(!x)return;
-    const div=document.createElement("div");div.className="wrongItem";
-    div.innerHTML=`<strong>${x.term} <span class="small">${x.pron}</span></strong><span>${DATA[x.level].label} · ${DATA[x.level].categories[x.category].label} · ${x.meaning}</span>`;
-    box.appendChild(div);
-  });
-  show("wrongBook");
-}
-function startWrongReview(){
-  const map=itemMap();
-  currentPool=wrongIds().map(id=>map[id]).filter(Boolean);
-  if(!currentPool.length){openWrongBook();return}
-  reviewMode=true;sessionScore=0;streak=0;queue=shuffle(currentPool);
-  $("quizModeLabel").textContent="오답 복습";
-  $("quizBack").onclick=openWrongBook;
-  show("quiz");nextQuestion();
-}
-function markCompleted(x){
-  const k=categoryKey(x.level,x.category);
-  const s=new Set(state.completed[k]||[]);s.add(x.id);state.completed[k]=[...s];saveState();
-}
-function markWrong(x){
-  state.wrong[x.id]=(state.wrong[x.id]||0)+1;saveState();
-}
-function clearWrong(x){delete state.wrong[x.id];saveState()}
+function allMeanings(){const out=[];for(const arr of Object.values(window.QUIZ_PACKS))for(const x of arr)out.push(x.meaning);return out}
 function wrongChoices(x){
   let pool=currentPool.map(i=>i.meaning).filter(m=>m!==x.meaning);
-  if(pool.length<3) pool=allItems().map(i=>i.meaning).filter(m=>m!==x.meaning);
-  return shuffle([...new Set(pool)]).slice(0,3);
+  if(pool.length<3)pool=pool.concat(allMeanings().filter(m=>m!==x.meaning));
+  return shuffle([...new Set(pool)]).slice(0,3)
 }
 function nextQuestion(){
-  if(!queue.length){
-    if(reviewMode){
-      openWrongBook();return;
-    }
-    queue=shuffle(currentPool);
-  }
-  current=queue.shift();tries=0;locked=false;renderQuestion();
+  if(!queue.length){$("feedback").textContent="현재 내려받은 데이터팩을 모두 풀었습니다.";return}
+  current=queue.shift();tries=0;locked=false;renderQuestion()
 }
 function renderQuestion(){
-  $("word").textContent=current.term;$("pron").textContent=current.pron;
-  $("badge").textContent=DATA[current.level].categories[current.category].label;
+  $("word").textContent=current.term;$("pron").textContent=current.pron;$("badge").textContent=M[selectedPackKey].categoryLabel;
   $("feedback").textContent="";$("learn").classList.add("hidden");$("nextBtn").classList.add("hidden");
-  const s=categoryStats(current.level,current.category);
-  if(reviewMode){
-    const remain=wrongIds().length;
-    $("quizProgress").textContent=`오답 ${remain}개 남음`;
-    $("quizBar").style.width=`${currentPool.length?Math.round((currentPool.length-queue.length-1)/currentPool.length*100):0}%`;
-  }else{
-    $("quizProgress").textContent=`진행 ${s.done}/${s.total} (${s.pct}%)`;
-    $("quizBar").style.width=`${s.pct}%`;
-  }
+  const done=doneCount(selectedPackKey),target=M[selectedPackKey].target,pct=Math.floor(done/target*100);
+  $("quizProgress").textContent=reviewMode?`오답 복습 · 남은 문제 ${queue.length+1}`:`진행 ${done.toLocaleString()}/${target.toLocaleString()} (${pct}%)`;
+  $("quizBar").style.width=reviewMode?`${Math.floor((1-(queue.length+1)/Math.max(1,currentPool.length))*100)}%`:`${pct}%`;
   $("sessionScore").textContent=`정답 ${sessionScore} · 연속 ${streak}`;
-  const opts=shuffle([current.meaning,...wrongChoices(current)]);
-  const box=$("choices");box.innerHTML="";
-  opts.forEach((o,i)=>{const b=document.createElement("button");b.className="choice";b.textContent=`${i+1}. ${o}`;b.onclick=()=>pick(b,o);box.appendChild(b)});
+  const opts=shuffle([current.meaning,...wrongChoices(current)]);const box=$("choices");box.innerHTML="";
+  opts.forEach((o,i)=>{const b=document.createElement("button");b.className="choice";b.textContent=`${i+1}. ${o}`;b.onclick=()=>pick(b,o);box.appendChild(b)})
 }
 function showLearn(){
   $("learn").classList.remove("hidden");
@@ -136,41 +85,49 @@ function showLearn(){
   $("structure").innerHTML=`<b>뜻 구조</b> · ${current.structure}`;
   $("mnemonic").innerHTML=`<b>암기법</b> · ${current.mnemonic}`;
   $("association").innerHTML=`<b>연상법</b> · ${current.association}`;
-  $("related").innerHTML=`<b>같이 외우기</b><div class="chips">${current.related.map(x=>`<span class="chip">${x.term} <span class="small">${x.pron}</span> = ${x.meaning}</span>`).join("")}</div>`;
+  $("related").innerHTML=`<b>같이 외우기</b><div class="chips">${(current.related||[]).map(x=>`<span class="chip">${x.term} <span class="small">${x.pron}</span> = ${x.meaning}</span>`).join("")}</div>`
 }
-function reveal(){
-  document.querySelectorAll(".choice").forEach(b=>{b.disabled=true;if(b.textContent.replace(/^\d+\.\s*/,"")===current.meaning)b.classList.add("correct")});
-}
-function pick(btn,val){
+function reveal(){document.querySelectorAll(".choice").forEach(b=>{b.disabled=true;if(b.textContent.replace(/^\d+\.\s*/,"")===current.meaning)b.classList.add("correct")})}
+async function pick(btn,val){
   if(locked)return;tries++;
   if(val===current.meaning){
-    locked=true;sessionScore++;streak++;btn.classList.add("correct");
-    document.querySelectorAll(".choice").forEach(x=>x.disabled=true);
-    markCompleted(current);
-    if(reviewMode && tries===1) clearWrong(current);
-    $("feedback").textContent=reviewMode&&tries===1?"이번에는 바로 맞혔습니다. 오답노트에서 제거됩니다.":"아래 정리까지 보고 다음 문제로 넘어가세요.";
-    showLearn();$("nextBtn").classList.remove("hidden");
+    locked=true;sessionScore++;streak++;btn.classList.add("correct");document.querySelectorAll(".choice").forEach(x=>x.disabled=true);
+    markDone(selectedPackKey,current.n);
+    if(reviewMode&&tries===1)await wrongDelete(selectedPackKey,current.n);
+    $("feedback").textContent=reviewMode&&tries===1?"오답노트에서 제거했습니다.":"아래 정리까지 보고 다음 문제로 넘어가세요.";showLearn();$("nextBtn").classList.remove("hidden")
   }else{
-    btn.classList.add("wrong");btn.disabled=true;streak=0;markWrong(current);
-    if(tries===1){$("feedback").textContent="한 번 더 도전해보세요."}
-    else{
-      locked=true;markCompleted(current);reveal();
-      $("feedback").textContent=reviewMode?"아직 오답노트에 유지됩니다. 다음 복습 때 다시 나옵니다.":"오답노트에 저장했습니다. 아래 정리로 외워보세요.";
-      showLearn();$("nextBtn").classList.remove("hidden");
-    }
+    btn.classList.add("wrong");btn.disabled=true;streak=0;await wrongPut(selectedPackKey,current.n);
+    if(tries===1)$("feedback").textContent="한 번 더 도전해보세요.";
+    else{locked=true;markDone(selectedPackKey,current.n);reveal();$("feedback").textContent="오답노트에 저장했습니다. 아래 정리로 외워보세요.";showLearn();$("nextBtn").classList.remove("hidden")}
   }
-  $("sessionScore").textContent=`정답 ${sessionScore} · 연속 ${streak}`;
-  if(!reviewMode){
-    const s=categoryStats(current.level,current.category);
-    $("quizProgress").textContent=`진행 ${s.done}/${s.total} (${s.pct}%)`;
-    $("quizBar").style.width=`${s.pct}%`;
+  $("sessionScore").textContent=`정답 ${sessionScore} · 연속 ${streak}`
+}
+async function openWrongBook(){
+  const rows=await wrongAll(),box=$("wrongList");box.innerHTML="";$("reviewAllBtn").disabled=!rows.length;$("reviewAllBtn").style.opacity=rows.length?1:.45;
+  if(!rows.length)box.innerHTML='<div class="empty">현재 오답이 없습니다.</div>';
+  else for(const r of rows.slice().sort((a,b)=>b.last-a.last)){
+    await loadPack(r.packKey);const x=(window.QUIZ_PACKS[r.packKey]||[]).find(v=>v.n===r.n);if(!x)continue;
+    const div=document.createElement("div");div.className="wrongItem";div.innerHTML=`<strong>${x.term} <span class="small">${x.pron}</span></strong><span>${M[r.packKey].levelLabel} · ${M[r.packKey].categoryLabel} · ${x.meaning} · 오답 ${r.count}회</span>`;box.appendChild(div)
   }
+  show("wrongBook")
+}
+async function startWrongReview(){
+  const rows=await wrongAll();if(!rows.length)return openWrongBook();
+  const grouped={};for(const r of rows)(grouped[r.packKey]??=[]).push(r);
+  const pool=[];for(const [pk,rs] of Object.entries(grouped)){await loadPack(pk);for(const r of rs){const x=(window.QUIZ_PACKS[pk]||[]).find(v=>v.n===r.n);if(x)pool.push({...x,_packKey:pk})}}
+  if(!pool.length)return openWrongBook();
+  reviewMode=true;sessionScore=0;streak=0;currentPool=pool;queue=shuffle(pool);
+  $("quizModeLabel").textContent="오답 복습";$("quizBack").onclick=openWrongBook;show("quiz");
+  const originalNext=nextQuestion;
+  nextQuestion=function(){if(!queue.length){openWrongBook();return}current=queue.shift();selectedPackKey=current._packKey;tries=0;locked=false;renderQuestion()};
+  nextQuestion();
+  $("nextBtn").onclick=nextQuestion
 }
 $("nextBtn").onclick=nextQuestion;
+$("wrongBtn").onclick=openWrongBook;$("homeBtn").onclick=showHome;$("wrongHomeBtn").onclick=showHome;$("reviewAllBtn").onclick=startWrongReview;
 renderHome();
 
 if("serviceWorker" in navigator){
-  let reloading=false;
-  navigator.serviceWorker.addEventListener("controllerchange",()=>{if(!reloading){reloading=true;location.reload()}});
-  window.addEventListener("load",async()=>{try{const r=await navigator.serviceWorker.register("./sw.js");r.update()}catch(e){}});
+  let reloading=false;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(!reloading){reloading=true;location.reload()}});
+  window.addEventListener("load",async()=>{try{const r=await navigator.serviceWorker.register("./sw.js");r.update()}catch(e){}})
 }
