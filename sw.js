@@ -1,4 +1,4 @@
-const CACHE="english-quiz-v6.0.0";
+const CACHE="english-quiz-v6.1.0";
 const CORE=["./","./index.html","./app.js","./core-data.js","./manifest.webmanifest","./icon-192.png","./icon-512.png"];
 self.addEventListener("install",e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)))});
 self.addEventListener("activate",e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

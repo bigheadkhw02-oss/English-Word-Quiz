@@ -142,18 +142,102 @@ function markSeen(x){
  if(!s.seen.includes(id))s.seen.push(id);
  saveCycle(x.pack,s);
 }
-function decorate(x,pack,cat){
- const primary=String(x.meaning).split(/[,;/]/)[0].trim();
- let structure="";
- if(cat==="derived")structure=detectAffix(x.term)||"원형에 접두사·접미사가 붙어 의미나 품사가 확장된 단어입니다.";
- else if(cat==="phrasal")structure="동사와 뒤의 부사·전치사를 하나의 의미 단위로 기억하세요.";
- else if(cat==="idiom")structure="단어별 직역보다 표현 전체의 관용적 뜻을 한 덩어리로 익히세요.";
- else if(cat==="phrase")structure="실제 대화에서 문장 전체를 그대로 꺼내 쓰는 표현입니다.";
- else structure=`${x.pos?`품사 ${x.pos} · `:""}핵심 뜻은 ‘${primary}’입니다.`;
- return {...x,pack,cat,structure,
-  mnemonic:`“${x.term}”을 보고 바로 “${primary}”가 떠오르게 짧게 여러 번 연결해 보세요.`,
-  association:`‘${primary}’이 실제로 필요한 상황을 한 장면으로 떠올려 보세요.`
+const PREFIXES=[
+ ["under","아래·부족하게"],["inter","사이·상호"],["trans","가로질러·넘어"],["super","위·초과"],["sub","아래·하위"],["anti","반대"],["over","지나치게·위로"],["pre","미리"],["post","뒤·이후"],["mis","잘못"],["dis","반대·분리"],["non","~이 아닌"],["re","다시"],["un","반대·부정"],["con","함께·완전히"],["com","함께"],["co","함께"]
+];
+const SUFFIXES=[
+ ["ization","~화하는 과정"],["ational","~에 관한"],["ability","~할 수 있는 성질"],["ibility","~할 수 있는 성질"],["tion","동작·과정·상태의 명사"],["sion","동작·상태의 명사"],["ment","결과·상태의 명사"],["ness","성질·상태의 명사"],["ity","성질·상태의 명사"],["able","~할 수 있는"],["ible","~할 수 있는"],["ful","~이 많은"],["less","~이 없는"],["ous","~한 성질의"],["ive","~하는 성질의"],["al","~에 관한"],["ly","~하게"],["ize","~하게 만들다"],["ify","~하게 만들다"],["ist","사람·전문가"],["ism","사상·체계"],["ship","상태·관계"],["hood","상태·시기"],["er","~하는 사람·도구"],["or","~하는 사람·도구"]
+];
+const ROOTS=[
+ ["cept","잡다·받다"],["spect","보다"],["dict","말하다"],["scrib","쓰다"],["script","쓰다"],["port","나르다"],["tract","끌다"],["ject","던지다"],["duc","이끌다"],["duct","이끌다"],["form","형태"],["struct","세우다·구성하다"],["press","누르다"],["gress","가다"],["vert","돌리다"],["vers","돌리다"],["vis","보다"],["vid","보다"],["phon","소리"],["photo","빛"],["graph","쓰다·그리다"],["log","말·학문"],["bio","생명"],["geo","땅"],["chron","시간"],["therm","열"],["tele","멀리"],["micro","작은"],["macro","큰"],["auto","스스로"],["manu","손"],["ped","발"],["cred","믿다"],["cap","잡다"],["tain","잡다·유지하다"],["ten","잡다·유지하다"],["ven","오다"],["vent","오다"],["mit","보내다"],["miss","보내다"],["aud","듣다"],["rupt","깨지다"],["mov","움직이다"],["mot","움직이다"],["fac","만들다"],["fect","만들다"],["fin","끝"],["term","끝·경계"],["numer","수"],["equ","같다"],["simil","비슷하다"]
+];
+const PARTICLES={up:"위로·완료",down:"아래로·감소",out:"밖으로·완전히",in:"안으로·참여",on:"계속·접촉",off:"떼어냄·중단",over:"넘어·다시 검토",through:"통과·끝까지",away:"멀리·제거",back:"뒤로·되돌림",around:"주변·이리저리",into:"안으로",across:"가로질러",along:"함께·계속",about:"주변·관련",for:"목적·대상",with:"함께",from:"출발·분리",to:"방향",at:"지점",by:"곁·수단"};
+const SPECIAL_MEMORY={
+ "washbowl":{structure:"wash(씻다) + bowl(그릇·대야) → 씻을 때 쓰는 대야",mnemonic:"wash + bowl을 그대로 붙여 보세요. ‘씻는(wash) 대야(bowl)’ = 세숫대야입니다.",association:"물을 받은 대야에 얼굴을 씻는 장면을 떠올리고, 대야 표면에 WASHBOWL이라고 적혀 있다고 상상하세요."},
+ "concept":{structure:"con-(함께) + cept(잡다) → 여러 생각을 함께 잡아 만든 핵심 생각",mnemonic:"con(함께) + cept(잡다) → 여러 생각을 한데 ‘잡아’ 정리한 것이 concept = 개념입니다.",association:"화이트보드에 흩어진 아이디어를 하나의 큰 원으로 묶고 그 원에 CONCEPT라고 쓰는 장면을 떠올리세요."}
+};
+function hnum(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function primaryMeaning(x){return String(x.meaning||"").split(/[,;/]/)[0].trim()}
+function cleanPos(p){p=String(p||"").toLowerCase();if(p.includes("verb"))return"verb";if(p.includes("noun"))return"noun";if(p.includes("adjective")||p==="adj")return"adjective";if(p.includes("adverb")||p==="adv")return"adverb";return p}
+function getCatalogMap(){if(!catalog)return null;if(!getCatalogMap.cache||getCatalogMap.n!==catalog.length){getCatalogMap.cache=new Map(catalog.map(v=>[norm(v.term),v]));getCatalogMap.n=catalog.length}return getCatalogMap.cache}
+function splitCompound(term){
+ const t=norm(term);if(!/^[a-z]{6,}$/.test(t))return null;const m=getCatalogMap();if(!m)return null;
+ let best=null;for(let i=3;i<=t.length-3;i++){const a=t.slice(0,i),b=t.slice(i);const A=m.get(a),B=m.get(b);if(A&&B){const score=(A.rank||999999)+(B.rank||999999);if(!best||score<best.score)best={a,b,A,B,score}}}
+ return best
+}
+function analyzeMorph(term){
+ const t=norm(term).replace(/[^a-z]/g,"");if(!t)return null;const sp=SPECIAL_MEMORY[t];if(sp)return {special:sp};
+ const compound=splitCompound(t);if(compound)return {compound};
+ let pre=null,suf=null,root=null;
+ for(const [a,d] of PREFIXES)if(t.startsWith(a)&&t.length>a.length+3){pre=[a,d];break}
+ for(const [a,d] of SUFFIXES)if(t.endsWith(a)&&t.length>a.length+3){suf=[a,d];break}
+ for(const [a,d] of ROOTS)if(t.includes(a)&&t.length>=a.length+2){root=[a,d];break}
+ if(pre||suf||root)return {pre,suf,root};return null
+}
+function morphStructure(x){
+ const a=analyzeMorph(x.term),primary=primaryMeaning(x);if(a?.special)return a.special.structure;
+ if(a?.compound){const {a:l,b:r,A,B}=a.compound;return `${l}(${primaryMeaning(A)}) + ${r}(${primaryMeaning(B)}) → ‘${primary}’`}
+ if(a){const bits=[];if(a.pre)bits.push(`${a.pre[0]}-(${a.pre[1]})`);if(a.root)bits.push(`${a.root[0]}(${a.root[1]})`);if(a.suf)bits.push(`-${a.suf[0]}(${a.suf[1]})`);if(bits.length)return bits.join(" + ")+` → ‘${primary}’`}
+ return `${x.pos?`품사 ${x.pos} · `:""}핵심 뜻은 ‘${primary}’입니다.`
+}
+function mnemonicFor(x,cat){
+ const primary=primaryMeaning(x),t=x.term,a=analyzeMorph(t);if(a?.special)return a.special.mnemonic;
+ if(cat==="phrasal"){
+  const parts=norm(t).split(" "),particle=parts.slice(1).find(v=>PARTICLES[v]);
+  return particle?`${parts[0]} + ${particle}(${PARTICLES[particle]})의 방향감을 먼저 떠올린 뒤, 표현 전체를 ‘${primary}’로 묶으세요.`:`${t}를 단어별로 떼지 말고 한 덩어리로 ‘${primary}’라고 기억하세요.`
+ }
+ if(cat==="idiom")return `관용표현 “${t}” 전체에 ‘${primary}’라는 한글 자막을 붙인다고 생각하세요. 직역보다 통째 암기가 우선입니다.`;
+ if(cat==="phrase")return `실제 대화에서 “${t}”를 말하는 순간 상대에게 전달되는 뜻이 ‘${primary}’라고 통째로 연결하세요.`;
+ if(a?.compound){const {a:l,b:r,A,B}=a.compound;return `${l}(${primaryMeaning(A)}) + ${r}(${primaryMeaning(B)})를 합쳐 ‘${primary}’로 연결하면 철자와 뜻을 동시에 잡을 수 있습니다.`}
+ if(a){const bits=[];if(a.pre)bits.push(`${a.pre[0]}=${a.pre[1]}`);if(a.root)bits.push(`${a.root[0]}=${a.root[1]}`);if(a.suf)bits.push(`${a.suf[0]}=${a.suf[1]}`);if(bits.length)return `${bits.join(", ")}로 쪼개서 보고 마지막에 ‘${primary}’로 합치세요.`}
+ const variants=[
+  `영어 철자 “${t}” 위에 ‘${primary}’라는 뜻표를 붙인다고 생각하고, 소리 내어 3번 연결하세요.`,
+  `“${primary}”를 떠올린 직후 ${t}를 말하는 순서로 외우세요. 뜻→영어 역방향 연결이 기억을 더 단단하게 만듭니다.`,
+  `${t}의 첫 글자 ${String(t)[0]?.toUpperCase()||""}를 ‘${primary}’의 시작 신호로 정하고 한 묶음으로 기억하세요.`,
+  `카드 앞면에 ${t}, 뒷면에 ‘${primary}’만 적었다고 상상하고 1초 안에 뒤집어 맞히는 방식으로 연결하세요.`,
+  `문장 빈칸에 ${t}가 들어가면 뜻이 ‘${primary}’가 된다고 기억하세요. 철자보다 의미 회상을 먼저 훈련합니다.`
+ ];return variants[hnum(t)%variants.length]
+}
+function associationFor(x,cat){
+ const p=primaryMeaning(x),t=x.term,pos=cleanPos(x.pos);const a=analyzeMorph(t);if(a?.special)return a.special.association;
+ if(cat==="phrasal")return `짧은 영상처럼 떠올리세요: 누군가 실제로 ‘${p}’하고, 행동이 끝나는 순간 화면에 “${t}”가 크게 뜹니다.`;
+ if(cat==="idiom")return `대화 말풍선에 “${t}”가 나오고 바로 아래 자막에 ‘${p}’가 뜨는 장면을 한 컷으로 기억하세요.`;
+ if(cat==="phrase")return `카페·거리·직장 같은 실제 대화 장면에서 상대에게 “${t}”라고 말하고, 상대가 ‘${p}’라는 뜻으로 이해하는 모습을 떠올리세요.`;
+ const variants={
+  noun:[`사진 한 장을 떠올리세요. ‘${p}’가 눈앞에 있고 그 아래 영어 이름표가 “${t}”입니다.`,`사전 그림처럼 ‘${p}’을 중앙에 놓고 바로 밑에 “${t}” 라벨을 붙인 장면을 기억하세요.`],
+  verb:[`짧은 영상으로 누군가 ‘${p}’하는 동작을 떠올리고, 그 동작이 시작되는 순간 “${t}” 자막을 띄우세요.`,`사람이 실제로 ‘${p}’하는 순간을 정지화면으로 만들고 화면 한가운데 “${t}”를 표시하세요.`],
+  adjective:[`같은 대상을 전·후로 비교해 한쪽이 ‘${p}’ 상태가 된 장면을 만들고 그쪽에 “${t}” 스티커를 붙이세요.`,`무언가가 딱 ‘${p}’해 보이는 장면을 고르고, 그 특징을 가리키는 화살표 끝에 “${t}”를 쓰세요.`],
+  adverb:[`어떤 행동이 ‘${p}’ 방식으로 진행되는 장면을 떠올리고, 행동 위에 “${t}” 자막을 겹치세요.`,`동작의 방식이 ‘${p}’로 바뀌는 순간 화면 구석에 “${t}” 표시가 켜진다고 상상하세요.`]
  };
+ const arr=variants[pos]||[`‘${p}’라는 상황을 한 장면으로 만들고, 그 장면 속 가장 눈에 띄는 곳에 “${t}”를 써 두세요.`,`머릿속 플래시카드에서 ‘${p}’ 장면과 “${t}” 철자가 동시에 보이게 한 컷으로 묶으세요.`];return arr[hnum(t+"assoc")%arr.length]
+}
+function tokenizeMeaning(s){return [...new Set(String(s||"").toLowerCase().replace(/[()~·]/g," ").split(/[\s,;/]+/).map(v=>v.trim()).filter(v=>v.length>=2))]}
+function commonPrefixLen(a,b){a=norm(a);b=norm(b);let i=0;while(i<a.length&&i<b.length&&a[i]===b[i])i++;return i}
+function relatedScore(a,b){
+ let s=0;const ap=cleanPos(a.pos),bp=cleanPos(b.pos);if(ap&&bp&&ap===bp)s+=2;
+ const A=tokenizeMeaning(a.meaning),B=new Set(tokenizeMeaning(b.meaning));for(const k of A)if(B.has(k))s+=6;
+ const ma=analyzeMorph(a.term),mb=analyzeMorph(b.term);
+ if(ma?.root&&mb?.root&&ma.root[0]===mb.root[0])s+=10;if(ma?.pre&&mb?.pre&&ma.pre[0]===mb.pre[0])s+=3;if(ma?.suf&&mb?.suf&&ma.suf[0]===mb.suf[0])s+=3;
+ const cp=commonPrefixLen(a.term,b.term);if(cp>=5)s+=5;else if(cp>=4)s+=3;
+ const aw=new Set(norm(a.term).split(" "));const bw=norm(b.term).split(" ");for(const w of bw)if(w.length>=3&&aw.has(w))s+=5;
+ return s
+}
+function getRelated(cur){
+ const candidates=currentPool.filter(x=>uid(x)!==uid(cur)).map(x=>({x,s:relatedScore(cur,x)}));
+ candidates.sort((a,b)=>b.s-a.s||Math.abs((a.x.rank||999999)-(cur.rank||999999))-Math.abs((b.x.rank||999999)-(cur.rank||999999))||String(a.x.term).localeCompare(String(b.x.term)));
+ let out=candidates.filter(v=>v.s>0).slice(0,2).map(v=>v.x);
+ if(out.length<2){for(const v of candidates){if(out.length>=2)break;if(!out.some(x=>uid(x)===uid(v.x)))out.push(v.x)}}
+ return out
+}
+function decorate(x,pack,cat){
+ const primary=primaryMeaning(x);
+ let structure="";
+ if(cat==="derived")structure=morphStructure(x);
+ else if(cat==="phrasal")structure="동사와 뒤의 부사·전치사가 결합하면서 원래 동사와 다른 하나의 뜻을 만듭니다.";
+ else if(cat==="idiom")structure="단어별 직역보다 표현 전체가 가진 관용적 뜻을 한 덩어리로 익히는 항목입니다.";
+ else if(cat==="phrase")structure="실제 대화에서 문장 전체를 그대로 꺼내 쓰는 표현입니다.";
+ else structure=morphStructure(x);
+ return {...x,pack,cat,structure,mnemonic:mnemonicFor(x,cat),association:associationFor(x,cat),primary}
 }
 function renderStaticHome(){
  const grid=$("levelGrid");grid.innerHTML="";
@@ -224,7 +308,7 @@ function nextQuestion(){reviewMode?nextReview():nextNormal()}
 function showLearn(){
  $("learn").classList.remove("hidden");$("core").innerHTML=`<b>${current.term}</b> <span class="small">${current.pron||""}</span> = ${current.meaning}`;
  $("structure").innerHTML=`<b>뜻 구조</b> · ${current.structure}`;$("mnemonic").innerHTML=`<b>암기법</b> · ${current.mnemonic}`;$("association").innerHTML=`<b>연상법</b> · ${current.association}`;
- const pals=shuffle(currentPool.filter(x=>uid(x)!==uid(current))).slice(0,2);$("related").innerHTML=`<b>같이 외우기</b><div class="chips">${pals.map(x=>`<span class="chip">${x.term} = ${x.meaning}</span>`).join("")}</div>`
+ const pals=getRelated(current);$("related").innerHTML=`<b>같이 외우기</b><div class="chips">${pals.map(x=>`<span class="chip">${x.term} = ${x.meaning}</span>`).join("")}</div>`
 }
 function reveal(){document.querySelectorAll(".choice").forEach(b=>{b.disabled=true;if(b.textContent.replace(/^\d+\.\s*/,"")===current.meaning)b.classList.add("correct")})}
 async function pick(btn,val){
@@ -264,4 +348,4 @@ renderStaticHome();refreshWrongCount();
 // Start dictionary loading in the background, but UI does not depend on it.
 setTimeout(()=>{loadDictionary().then(()=>{buckets=null}).catch(()=>{})},400);
 
-if("serviceWorker" in navigator){let reloading=false;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(!reloading){reloading=true;location.reload()}});window.addEventListener("load",async()=>{try{const r=await navigator.serviceWorker.register("./sw.js?v=6.0");await r.update()}catch(e){}})}
+if("serviceWorker" in navigator){let reloading=false;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(!reloading){reloading=true;location.reload()}});window.addEventListener("load",async()=>{try{const r=await navigator.serviceWorker.register("./sw.js?v=6.1");await r.update()}catch(e){}})}
