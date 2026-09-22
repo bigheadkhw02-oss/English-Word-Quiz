@@ -22,6 +22,95 @@ let reviewMode=false,sessionScore=0,streak=0,tries=0,locked=false,reviewQueue=[]
 function show(id){screens.forEach(s=>$(s).classList.toggle("hidden",s!==id));window.scrollTo(0,0)}
 function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function norm(s){return String(s||"").trim().toLowerCase().replace(/\s+/g," ")}
+function ipaToKorean(ipa){
+ let raw=String(ipa||"").trim();if(!raw)return "";
+ raw=raw.split(/[;,]/)[0].replace(/[\/\[\]()]/g,"").replace(/[ˈˌ.]/g,"").replace(/:/g,"ː").trim();
+ const multi=["tʃ","dʒ","eɪ","aɪ","ɔɪ","aʊ","oʊ","əʊ","ɪə","eə","ʊə","iː","uː","ɑː","ɔː","ɜː","ɝ","ɚ"];
+ const consonants=new Set(["p","b","t","d","k","g","f","v","θ","ð","s","z","ʃ","ʒ","h","tʃ","dʒ","m","n","ŋ","l","r","ɹ","j","w"]);
+ const vowels={
+  "iː":["이"],"i":["이"],"ɪ":["이"],"e":["에"],"ɛ":["에"],"æ":["애"],
+  "ɑː":["아"],"ɑ":["아"],"ɒ":["오"],"ɔː":["오"],"ɔ":["오"],"ʌ":["어"],"ɜː":["어"],"ə":["어"],"ɝ":["어"],"ɚ":["어"],
+  "uː":["우"],"u":["우"],"ʊ":["우"],"eɪ":["에","이"],"aɪ":["아","이"],"ɔɪ":["오","이"],"aʊ":["아","우"],"oʊ":["오","우"],"əʊ":["오","우"],"ɪə":["이","어"],"eə":["에","어"],"ʊə":["우","어"]
+ };
+ const onset={"p":"ㅍ","b":"ㅂ","t":"ㅌ","d":"ㄷ","k":"ㅋ","g":"ㄱ","f":"ㅍ","v":"ㅂ","θ":"ㅅ","ð":"ㄷ","s":"ㅅ","z":"ㅈ","ʃ":"ㅅ","ʒ":"ㅈ","h":"ㅎ","tʃ":"ㅊ","dʒ":"ㅈ","m":"ㅁ","n":"ㄴ","ŋ":"ㅇ","l":"ㄹ","r":"ㄹ","ɹ":"ㄹ"};
+ const coda={"p":"ㅂ","b":"ㅂ","t":"ㅅ","d":"ㄷ","k":"ㄱ","g":"ㄱ","f":"ㅂ","v":"ㅂ","θ":"ㅅ","ð":"ㄷ","s":"ㅅ","z":"ㅅ","ʃ":"ㅅ","ʒ":"ㅅ","m":"ㅁ","n":"ㄴ","ŋ":"ㅇ","l":"ㄹ"};
+ const lead={"ㄱ":0,"ㄲ":1,"ㄴ":2,"ㄷ":3,"ㄸ":4,"ㄹ":5,"ㅁ":6,"ㅂ":7,"ㅃ":8,"ㅅ":9,"ㅆ":10,"ㅇ":11,"ㅈ":12,"ㅉ":13,"ㅊ":14,"ㅋ":15,"ㅌ":16,"ㅍ":17,"ㅎ":18};
+ const med={"아":0,"애":1,"야":2,"얘":3,"어":4,"에":5,"여":6,"예":7,"오":8,"와":9,"왜":10,"외":11,"요":12,"우":13,"워":14,"웨":15,"위":16,"유":17,"으":18,"의":19,"이":20};
+ const tail={"":0,"ㄱ":1,"ㄲ":2,"ㄳ":3,"ㄴ":4,"ㄵ":5,"ㄶ":6,"ㄷ":7,"ㄹ":8,"ㄺ":9,"ㄻ":10,"ㄼ":11,"ㄽ":12,"ㄾ":13,"ㄿ":14,"ㅀ":15,"ㅁ":16,"ㅂ":17,"ㅄ":18,"ㅅ":19,"ㅆ":20,"ㅇ":21,"ㅈ":22,"ㅊ":23,"ㅋ":24,"ㅌ":25,"ㅍ":26,"ㅎ":27};
+ function syl(o,v,c=""){
+  o=(o in lead)?o:"ㅇ";c=(c in tail)?c:"";if(!(v in med))return v;
+  return String.fromCharCode(0xAC00+(lead[o]*21+med[v])*28+tail[c])
+ }
+ function tokenise(word){
+  const out=[];
+  for(let i=0;i<word.length;){
+   let hit="";for(const m of multi){if(word.startsWith(m,i)){hit=m;break}}
+   if(hit){out.push(hit);i+=hit.length;continue}
+   const ch=word[i];if(consonants.has(ch)||vowels[ch])out.push(ch);i++;
+  }
+  return out
+ }
+ function glideVowel(glide,v){
+  if(glide==="j"){
+   const first=v[0];const m={"아":"야","애":"얘","어":"여","에":"예","오":"요","우":"유","이":"이"}[first]||first;return [m,...v.slice(1)]
+  }
+  if(glide==="w"){
+   const first=v[0];const m={"아":"와","애":"왜","어":"워","에":"웨","오":"워","우":"우","이":"위"}[first]||first;return [m,...v.slice(1)]
+  }
+  return v
+ }
+ function renderSyllable(onsetTok,vowelSeq,codaTok){
+  let seq=[...vowelSeq],o="ㅇ";
+  if(onsetTok){
+   if(Array.isArray(onsetTok)){
+    const base=onsetTok[0],gl=onsetTok[1];o=onset[base]||"ㅇ";seq=glideVowel(gl,seq)
+   }else if(onsetTok==="j"||onsetTok==="w"){seq=glideVowel(onsetTok,seq)}
+   else o=onset[onsetTok]||"ㅇ";
+  }
+  let txt="";for(let q=0;q<seq.length;q++)txt+=syl(q===0?o:"ㅇ",seq[q],q===seq.length-1&&codaTok?(coda[codaTok]||""):"");return txt
+ }
+ function epenthetic(c){
+  if(c==="r"||c==="ɹ")return "";
+  if(c==="j")return "이";if(c==="w")return "우";
+  return syl(onset[c]||"ㅇ","으")
+ }
+ function convertWord(word){
+  const t=tokenise(word);if(!t.length)return "";
+  const vp=[];for(let i=0;i<t.length;i++)if(vowels[t[i]])vp.push(i);if(!vp.length)return "";
+  const syll=[];
+  for(let vi=0;vi<vp.length;vi++){
+   const vpos=vp[vi],prevV=vi?vp[vi-1]:-1,nextV=vi+1<vp.length?vp[vi+1]:t.length;
+   let before=t.slice(prevV+1,vpos).filter(x=>consonants.has(x));
+   let after=t.slice(vpos+1,nextV).filter(x=>consonants.has(x));
+   let onsetTok=null,codaTok=null,prefix="",suffix="";
+   if(before.length){
+    if(before.length>=2&&(before.at(-1)==="j"||before.at(-1)==="w")){const base=before.at(-2);onsetTok=[base,before.at(-1)];before=before.slice(0,-2)}
+    else{onsetTok=before.pop()}
+    if(vi===0){for(const c of before)prefix+=epenthetic(c)}
+    else if(before.length){/* handled as the previous syllable's coda/extra cluster */}
+   }
+   if(vi===vp.length-1){
+    let finals=after.filter(c=>c!=="r"&&c!=="ɹ");
+    if(finals.length===1)codaTok=finals[0];
+    else if(finals.length>=2){
+     const pair=finals.slice(-2).join("");
+     if(["nt","nd","mp","ŋk","ld"].includes(pair)){codaTok=finals.at(-2);suffix+=epenthetic(finals.at(-1));finals=finals.slice(0,-2)}
+     else if(pair==="st"){suffix+="스"+epenthetic("t");finals=finals.slice(0,-2)}
+     else{codaTok=finals.shift();for(const c of finals)suffix+=epenthetic(c);finals=[]}
+    }
+   }else if(after.length>=2){
+    let cluster=[...after];
+    if(cluster.at(-1)==="j"||cluster.at(-1)==="w")cluster=cluster.slice(0,-2);else cluster=cluster.slice(0,-1);
+    cluster=cluster.filter(c=>c!=="r"&&c!=="ɹ");
+    if(cluster.length){codaTok=cluster.shift();for(const c of cluster)suffix+=epenthetic(c)}
+   }
+   syll.push(prefix+renderSyllable(onsetTok,vowels[t[vpos]],codaTok)+suffix)
+  }
+  return syll.join("")
+ }
+ return raw.split(/\s+/).map(convertWord).filter(Boolean).join(" ")
+}
+function koreanPron(pron){return ipaToKorean(pron)}
 function levelLabel(l){return LEVELS.find(x=>x[0]===l)?.[1]||l}
 function packKey(l,c){return l+":"+c}
 function uid(x){return norm(x.term)+"|"+norm(x.meaning)}
@@ -67,8 +156,10 @@ async function loadDictionary(){
  if(loadPromise)return loadPromise;
  loadPromise=(async()=>{
   $("dictState").textContent="불러오는 중";
+  const cachedKo=await kvGet("oekd-v6-ko-v6.2");
+  if(cachedKo?.length){catalog=cachedKo;$("dictState").textContent=catalog.length.toLocaleString()+"개";$("dataNotice").textContent=`영한사전 ${catalog.length.toLocaleString()}개 + 내장 숙어·구동사·회화가 준비됐습니다.`;return catalog}
   const cached=await kvGet("oekd-v6");
-  if(cached?.length){catalog=cached;$("dictState").textContent=catalog.length.toLocaleString()+"개";$("dataNotice").textContent=`영한사전 ${catalog.length.toLocaleString()}개 + 내장 숙어·구동사·회화가 준비됐습니다.`;return catalog}
+  if(cached?.length){catalog=cached.map(x=>({...x,pron:koreanPron(x.pron)}));await kvSet("oekd-v6-ko-v6.2",catalog);$("dictState").textContent=catalog.length.toLocaleString()+"개";$("dataNotice").textContent=`영한사전 ${catalog.length.toLocaleString()}개 + 내장 숙어·구동사·회화가 준비됐습니다.`;return catalog}
   try{
    const c=new AbortController(),timer=setTimeout(()=>c.abort(),30000);
    const r=await fetch(OEKD_URL,{cache:"no-cache",signal:c.signal});clearTimeout(timer);
@@ -76,9 +167,9 @@ async function loadDictionary(){
    const raw=await r.json(),arr=[];
    for(const [term,v] of Object.entries(raw)){
     const meaning=String(v.meaning_ko||"").trim();if(!meaning)continue;
-    arr.push({term:String(term).trim(),meaning,pron:String(v.ipa||""),pos:String(v.pos||""),cefr:String(v.cefr||"").toUpperCase(),rank:Number(v.freq_rank)||999999});
+    arr.push({term:String(term).trim(),meaning,pron:koreanPron(v.ipa||""),pos:String(v.pos||""),cefr:String(v.cefr||"").toUpperCase(),rank:Number(v.freq_rank)||999999});
    }
-   catalog=arr;await kvSet("oekd-v6",arr);
+   catalog=arr;await kvSet("oekd-v6-ko-v6.2",arr);
    $("dictState").textContent=arr.length.toLocaleString()+"개";
    $("dataNotice").textContent=`영한사전 ${arr.length.toLocaleString()}개 + 내장 숙어·구동사·회화가 준비됐습니다.`;
    return catalog;
@@ -331,7 +422,7 @@ function speakCurrent(){
 async function openWrongBook(){
  const rows=await wrongAll(),box=$("wrongList");box.innerHTML="";$("reviewAllBtn").disabled=!rows.length;$("reviewAllBtn").style.opacity=rows.length?1:.45;
  if(!rows.length)box.innerHTML='<div class="empty">현재 오답이 없습니다.</div>';
- else rows.sort((a,b)=>b.last-a.last).forEach(r=>{const d=document.createElement("div");d.className="wrongItem";d.innerHTML=`<strong>${r.term} <span class="small">${r.pron||""}</span></strong><span>${r.meaning} · 오답 ${r.count}회</span>`;box.appendChild(d)});
+ else rows.sort((a,b)=>b.last-a.last).forEach(r=>{const d=document.createElement("div");d.className="wrongItem";d.innerHTML=`<strong>${r.term} <span class="small">${koreanPron(r.pron)||""}</span></strong><span>${r.meaning} · 오답 ${r.count}회</span>`;box.appendChild(d)});
  show("wrongBook")
 }
 async function startWrongReview(){
@@ -348,4 +439,4 @@ renderStaticHome();refreshWrongCount();
 // Start dictionary loading in the background, but UI does not depend on it.
 setTimeout(()=>{loadDictionary().then(()=>{buckets=null}).catch(()=>{})},400);
 
-if("serviceWorker" in navigator){let reloading=false;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(!reloading){reloading=true;location.reload()}});window.addEventListener("load",async()=>{try{const r=await navigator.serviceWorker.register("./sw.js?v=6.1");await r.update()}catch(e){}})}
+if("serviceWorker" in navigator){let reloading=false;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(!reloading){reloading=true;location.reload()}});window.addEventListener("load",async()=>{try{const r=await navigator.serviceWorker.register("./sw.js?v=6.2");await r.update()}catch(e){}})}
