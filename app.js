@@ -62,7 +62,7 @@ function detailedKoreanPron(ipa){
  }
  return raw.split(/\s+/).map(w=>convertWord(w.replace(/[ˈˌ.]/g,""))).filter(Boolean).join(" ")
 }
-function fullPron(pron){const ipa=String(pron||"").trim();if(!ipa)return "";const ko=detailedKoreanPron(ipa);return ko?`IPA ${ipa} · 한글 ${ko}`:`IPA ${ipa}`}
+function fullPron(pron){const ipa=String(pron||"").trim();if(!ipa)return "";const ko=detailedKoreanPron(ipa);return ko?`${ipa} · ${ko}`:`${ipa}`}
 function levelLabel(l){return LEVELS.find(x=>x[0]===l)?.[1]||l}
 function packKey(l,c){return l+":"+c}
 function uid(x){return norm(x.term)+"|"+norm(x.meaning)}
